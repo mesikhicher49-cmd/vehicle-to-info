@@ -1,35 +1,77 @@
-// pages/api/vehicle.js  OR  api/vehicle.js (choose one of these two locations)
+// pages/api/index.js
 export default async function handler(req, res) {
+  const REMOTE_BASE =
+    process.env.REMOTE_API_BASE ||
+    "https://z.taitaninfo.workers.dev";
+
   try {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    const vehicle = (req.query.vehicle || "").toString().trim();
-    if (!vehicle) return res.status(400).json({ ok:false, error: "Missing 'vehicle' query param" });
+    const upstreamUrl = new URL(REMOTE_BASE);
 
-    const upstreamUrl = `https://z.taitaninfo.workers.dev/?vehicle=${encodeURIComponent(vehicle)}`;
-    const upstreamResp = await fetch(upstreamUrl, { headers: { "User-Agent": "Vehicle-Proxy/1.0" } });
+    // 🔁 rc -> vehicle (API doc: ?vehicle={rc})
+    const { rc, ...restQuery } = req.query || {};
 
-    const text = await upstreamResp.text();
-    if (!upstreamResp.ok) {
-      return res.status(502).json({ ok:false, error:"Upstream failed", status: upstreamResp.status, body: text });
+    if (rc) {
+      if (Array.isArray(rc)) {
+        // agar multiple rc aaye to last use kar lete hain
+        upstreamUrl.searchParams.set("vehicle", rc[rc.length - 1]);
+      } else {
+        upstreamUrl.searchParams.set("vehicle", rc);
+      }
     }
 
-    let data;
-    try { data = JSON.parse(text); } catch(e) {
-      return res.status(502).json({ ok:false, error:"Upstream JSON parse error", body: text });
+    // Baaki sare query params as-is forward kar do
+    Object.entries(restQuery).forEach(([k, v]) => {
+      if (Array.isArray(v)) {
+        v.forEach((val) => upstreamUrl.searchParams.append(k, val));
+      } else {
+        upstreamUrl.searchParams.append(k, v);
+      }
+    });
+
+    const r = await fetch(upstreamUrl.toString(), {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Accept: "application/json, text/plain, */*",
+      },
+    });
+
+    const text = await r.text();
+
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch (err) {
+      return res.status(502).json({
+        success: false,
+        message: "Upstream returned invalid JSON",
+        upstreamStatus: r.status,
+        preview: text.slice(0, 2000),
+      });
     }
 
-    const newUser = "@MessiTrace_Networks";
-    data.telegram_user = newUser;
-    data.telegram_channel = newUser;
-    if (data.api_response && typeof data.api_response === "object") {
-      if ("telegram_user" in data.api_response) data.api_response.telegram_user = newUser;
-      if ("telegram_channel" in data.api_response) data.api_response.telegram_channel = newUser;
-    }
+    // ❌ Saare purane credit / tag / telegram fields hata do
+    delete payload.developer;
+    delete payload.brand;
+    delete payload.developer_message;
+    delete payload.developer_tag;
+    delete payload.credit_by;
+    delete payload.powered_by;
+    delete payload.telegram_user;
+    delete payload.telegram_channel;
 
-    res.setHeader("Content-Type","application/json");
-    return res.status(200).json(data);
+    // ✅ Apne final credits + telegram usernames
+    payload.developer = "@rkmod_x";
+    payload.brand = "Api By R K";
+
+    payload.telegram_user = "@rkmod_x";
+    payload.telegram_channel = "@VanshEarningKing";
+
+    return res.status(200).json(payload);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok:false, error: String(err) });
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
   }
 }
