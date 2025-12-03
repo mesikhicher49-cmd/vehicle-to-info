@@ -48,7 +48,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // purane credits / telegram remove
+    // ❌ saare dev/credit fields hata do
     delete payload.developer;
     delete payload.brand;
     delete payload.developer_message;
@@ -58,11 +58,7 @@ export default async function handler(req, res) {
     delete payload.telegram_user;
     delete payload.telegram_channel;
 
-    // apne final credits
-    payload.developer = "@rkmod_x";
-    payload.brand = "Api By R K";
-
-    // apne telegram ids
+    // ✅ sirf ye 2 fields add karo
     payload.telegram_user = "@rkmod_x";
     payload.telegram_channel = "@VanshEarningKing";
 
@@ -74,4 +70,4 @@ export default async function handler(req, res) {
       error: err.message,
     });
   }
-}
+      }
